@@ -125,9 +125,22 @@ MVP ориентирован на **статичные HTML-источники**
 - VS Code
 - pytest / unittest
 
-## Установка
+## Подготовка окружения
 
-```bash
+Перед запуском проекта необходимо создать виртуальное окружение и установить зависимости из `requirements.txt`.
+
+```text
+Linux / macOS:
 python -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt
+
+Windows PowerShell:
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+Windows cmd:
+python -m venv .venv
+.venv\Scripts\activate.bat
 pip install -r requirements.txt
