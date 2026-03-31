@@ -113,17 +113,35 @@ MVP ориентирован на **статичные HTML-источники**
 
 Если новый источник использует уже существующий parser, достаточно изменить конфиг.  
 Если нужен новый parser, достаточно добавить новый класс и прописать его dotted path в конфиге.
+## Тестирование
+Проект использует pytest для модульного тестирования с моккированием внешних зависимостей.
 
+### Структура тестов
+Модуль	Файл	Проверяемое
+- `unit-tests_config.py`	        Парсинг JSON, валидация полей
+- `unit-tests_domain.py`	        Снапшоты, хеши, даты
+- `unit-tests_infrastructure.py`	Парсеры, хранилище, STIX
+- `unit-tests_ports.py`	            Абстракции через моки
+- `unit-test_application.py`        PipelineRunner, фильтрация
+### Запуск Unit-тестов
+- `python run_tests.py`               Все Unit-тесты (всего 26)
+### Запуск Smoke-тестов
+- `python -m pytest tests/smoke-tests.py --cov=ti_framework.config:tests/smoke_test.py --cov-report=term-missing -v`
+### Результаты тестирования
+- [Результаты unit-тестов](./tests/results/unit-tests.pdf)
+- [Результаты smoke-тестов](./tests/results/smoke-tests.pdf)
 ## Стек технологий
 
 - **Python 3.11+**
 - `requests`
 - `beautifulsoup4`
 - `stix2`
+- `pytest` / `pytest-cov`
+- `unittest.mock`
 - JSON-конфиги
 - GitHub
 - VS Code
-- pytest / unittest
+
 
 ## Подготовка окружения
 
