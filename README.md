@@ -54,14 +54,26 @@
 - `StixBundleBuilder`
 - `Storage`
 - `BundleStorage`
+- `HttpClient`
+- `IOCFilter`
 
 ### Реализации (`src/ti_framework/infrastructure`)
 Для MVP добавлены реализации:
 
 - `WebScrapper`
 - `Utf8SnapshotPreprocessor`
+- `PreviousSnapshotDiffer`
+- `WebEntryFetcher`
 - `Stix21BundleBuilder`
 - `FileSystemBundleStorage`
+- `RequestsHttpClient`
+- `RuleBasedIOCFilter`
+
+Также в проекте присутствуют source-specific парсеры:
+
+- `Sec1275Parser`
+- `SecurelistParser`
+- `ProofpointThreatInsightParser`
 
 ## STIX-слой
 
@@ -148,18 +160,57 @@ MVP ориентирован на **статичные HTML-источники**
 Перед запуском проекта необходимо создать виртуальное окружение и установить зависимости из `requirements.txt`.
 
 ```text
-Linux / macOS:
+Linux / macOS
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
 
-Windows PowerShell:
+Windows PowerShell
 python -m venv .venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -e .
 
-Windows cmd:
+Windows cmd
 python -m venv .venv
 .venv\Scripts\activate.bat
 pip install -r requirements.txt
+pip install -e .
+
+## Запуск
+
+После установки проекта как пакета (`pip install -e .`) доступны команды:
+
+```bash
+ti-framework validate --config config/sources.json
+ti-framework run --config config/sources.json
+ti-framework status
+```
+
+Если команда `ti-framework` недоступна, можно использовать запуск через Python.
+
+Linux / macOS:
+PYTHONPATH=./src python -m ti_framework.cli validate --config config/sources.json
+PYTHONPATH=./src python -m ti_framework.cli run --config config/sources.json
+PYTHONPATH=./src python -m ti_framework.cli status
+
+Windows PowerShell:
+$env:PYTHONPATH="./src"
+python -m ti_framework.cli validate --config config/sources.json
+python -m ti_framework.cli run --config config/sources.json
+python -m ti_framework.cli status
+
+Windows cmd:
+set PYTHONPATH=./src
+python -m ti_framework.cli validate --config config/sources.json
+python -m ti_framework.cli run --config config/sources.json
+python -m ti_framework.cli status
+
+Во время работы framework формирует:
+
+- snapshot-данные в `data/snapshots`
+- STIX bundles в `data/bundles`
+- статус последнего запуска в `data/status/last_run.json`
+- лог выполнения pipeline в `data/logs/pipeline.log`
