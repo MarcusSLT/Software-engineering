@@ -46,6 +46,7 @@ def main() -> None:
         entry_fetcher=entry_fetcher,
         stix_bundle_builder=stix_bundle_builder,
         bundle_storage=bundle_storage,
+        log_level="INFO",
     )
 
     source_configs = load_source_configs(sources_path)

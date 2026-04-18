@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from urllib.parse import urljoin, urlparse
 
@@ -10,6 +11,8 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 from ti_framework.domain.exceptions import ParsingError
 from ti_framework.domain.models import Entry, IOC, IndexEntry, PreprocessedData
 from ti_framework.ports.parser import Parser
+
+logger = logging.getLogger(__name__)
 
 
 class SecurelistParser(Parser):
@@ -67,6 +70,7 @@ class SecurelistParser(Parser):
     )
 
     def parse_index(self, data: PreprocessedData) -> list[IndexEntry]:
+        logger.info("%s: parsing index snapshot for %s", self.__class__.__name__, data.source_url)
         try:
             soup = BeautifulSoup(data.text, "html.parser")
             entries = self._extract_index_entries(soup=soup, data=data)
@@ -77,9 +81,11 @@ class SecurelistParser(Parser):
 
         if not entries:
             raise ParsingError(f"No index entries were extracted from snapshot of source '{data.source_name}'")
+        logger.info("%s: extracted %d index entries from %s", self.__class__.__name__, len(entries), data.source_url)
         return entries
 
     def parse_entry(self, data: PreprocessedData, index_entry: IndexEntry) -> Entry:
+        logger.info("%s: parsing entry page %s", self.__class__.__name__, data.source_url)
         if data.snapshot_kind != "entry":
             raise ParsingError(f"parse_entry() expects an entry snapshot, got snapshot_kind={data.snapshot_kind!r}")
 
@@ -94,7 +100,7 @@ class SecurelistParser(Parser):
         except Exception as exc:  # noqa: BLE001
             raise ParsingError(f"Failed to parse entry snapshot for {data.source_url}: {exc}") from exc
 
-        return Entry(
+        entry = Entry(
             title=title,
             content=content,
             source_url=data.source_url,
@@ -102,6 +108,8 @@ class SecurelistParser(Parser):
             collected_at=data.collected_at,
             iocs=iocs,
         )
+        logger.info("%s: parsed entry '%s' with %d IOC(s)", self.__class__.__name__, entry.title, len(entry.iocs))
+        return entry
 
     def _extract_index_entries(self, *, soup: BeautifulSoup, data: PreprocessedData) -> list[IndexEntry]:
         seen_urls: set[str] = set()
