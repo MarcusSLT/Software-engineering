@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from datetime import UTC
+import logging
 from typing import Any
 
 from stix2 import properties
@@ -24,6 +25,8 @@ from stix2.v21 import (
 from ti_framework.domain.exceptions import StixBundleError
 from ti_framework.domain.models import Entry, IOC
 from ti_framework.ports.stix_bundle_builder import StixBundleBuilder
+
+logger = logging.getLogger(__name__)
 
 
 @CustomObservable(
@@ -71,8 +74,10 @@ class Stix21BundleBuilder(StixBundleBuilder):
     def build(self, entries: Iterable[Entry]) -> Bundle | None:
         entries = list(entries)
         if not entries:
+            logger.debug("Skipping STIX bundle build because there are no parsed entries")
             return None
 
+        logger.info("Building STIX 2.1 bundle from %d parsed entries", len(entries))
         try:
             registry: dict[str, Any] = {}
             reports: list[Report] = []
@@ -103,7 +108,9 @@ class Stix21BundleBuilder(StixBundleBuilder):
                 if object_id not in report_ids and object_id != source_identity.id
             )
             ordered_objects.extend(reports)
-            return Bundle(objects=ordered_objects, allow_custom=True)
+            bundle = Bundle(objects=ordered_objects, allow_custom=True)
+            logger.info("Built STIX bundle %s with %d objects", bundle.id, len(bundle.objects))
+            return bundle
         except StixBundleError:
             raise
         except Exception as exc:  # noqa: BLE001 - STIX boundary

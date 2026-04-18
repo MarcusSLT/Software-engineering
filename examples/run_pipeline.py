@@ -14,6 +14,10 @@ from ti_framework.application.pipeline_runner import PipelineRunner
 from ti_framework.config.loaders import load_source_configs
 from ti_framework.infrastructure.differs.previous_snapshot_differ import PreviousSnapshotDiffer
 from ti_framework.infrastructure.fetchers.web_entry_fetcher import WebEntryFetcher
+from ti_framework.infrastructure.filters.invalid_domain_rule import DropInvalidDomainRule
+from ti_framework.infrastructure.filters.internal_url_rule import DropInternalUrlRule
+from ti_framework.infrastructure.filters.rule_based_ioc_filter import RuleBasedIOCFilter
+from ti_framework.infrastructure.filters.special_purpose_ipv4_rule import DropSpecialPurposeIPv4Rule
 from ti_framework.infrastructure.http.requests_http_client import RequestsHttpClient
 from ti_framework.infrastructure.parsers.parser_loader import load_parser
 from ti_framework.infrastructure.preprocessors.utf8_snapshot_preprocessor import Utf8SnapshotPreprocessor
@@ -27,6 +31,7 @@ def main() -> None:
     sources_path = PROJECT_ROOT / "config" / "sources.json"
     snapshots_dir = PROJECT_ROOT / "data" / "snapshots"
     bundles_dir = PROJECT_ROOT / "data" / "bundles"
+    logs_dir = PROJECT_ROOT / "data" / "logs"
 
     storage = FileSystemSnapshotStorage(root_dir=snapshots_dir)
     bundle_storage = FileSystemBundleStorage(root_dir=bundles_dir)
@@ -36,6 +41,11 @@ def main() -> None:
     differ = PreviousSnapshotDiffer(storage=storage)
     entry_fetcher = WebEntryFetcher(scrapper=scrapper)
     stix_bundle_builder = Stix21BundleBuilder()
+    ioc_filter = RuleBasedIOCFilter([
+        DropSpecialPurposeIPv4Rule(),
+        DropInvalidDomainRule(),
+        DropInternalUrlRule(),
+    ])
 
     runner = PipelineRunner(
         scrapper=scrapper,
@@ -44,8 +54,11 @@ def main() -> None:
         storage=storage,
         parser_loader=load_parser,
         entry_fetcher=entry_fetcher,
+        ioc_filter=ioc_filter,
         stix_bundle_builder=stix_bundle_builder,
         bundle_storage=bundle_storage,
+        log_level="INFO",
+        log_file=logs_dir / "pipeline.log",
     )
 
     source_configs = load_source_configs(sources_path)
@@ -53,6 +66,11 @@ def main() -> None:
 
     for result in results:
         print(f"Source: {result.source_name}")
+        print(f"  succeeded: {result.succeeded}")
+        if not result.succeeded:
+            print(f"  error: {result.error_message}")
+            continue
+
         print(f"  index snapshot kept: {not result.snapshot_deleted}")
         print(f"  total index entries: {result.total_index_entries}")
         print(f"  new index entries: {result.new_index_entries}")

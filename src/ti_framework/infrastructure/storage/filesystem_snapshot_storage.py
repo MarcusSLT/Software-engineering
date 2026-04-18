@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,8 @@ from typing import Any
 from ti_framework.domain.exceptions import SnapshotNotFoundError, SnapshotStorageError
 from ti_framework.domain.models import Snapshot, SnapshotHandle, SnapshotKind
 from ti_framework.ports.storage import SnapshotStorage
+
+logger = logging.getLogger(__name__)
 
 _SCHEMA_VERSION = 2
 
@@ -22,6 +25,7 @@ class FileSystemSnapshotStorage(SnapshotStorage):
         self._root_dir = Path(root_dir)
 
     def save(self, snapshot: Snapshot) -> SnapshotHandle:
+        logger.debug("Saving %s snapshot for source '%s'", snapshot.snapshot_kind, snapshot.source_name)
         target_dir = self._snapshot_dir(snapshot.source_name, snapshot.snapshot_kind)
         target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,9 +48,12 @@ class FileSystemSnapshotStorage(SnapshotStorage):
         except OSError as exc:
             raise SnapshotStorageError(f"Failed to save snapshot to {path}: {exc}") from exc
 
-        return SnapshotHandle(locator=str(path))
+        handle = SnapshotHandle(locator=str(path))
+        logger.debug("Saved snapshot to %s", handle.locator)
+        return handle
 
     def load(self, handle: SnapshotHandle) -> Snapshot:
+        logger.debug("Loading snapshot %s", handle.locator)
         path = Path(handle.locator)
         if not path.exists():
             raise SnapshotNotFoundError(f"Snapshot not found: {path}")
@@ -59,11 +66,19 @@ class FileSystemSnapshotStorage(SnapshotStorage):
             raise SnapshotStorageError(f"Snapshot file is not valid JSON: {path}") from exc
 
         try:
-            return self._decode_snapshot(payload)
+            snapshot = self._decode_snapshot(payload)
+            logger.debug(
+                "Loaded snapshot %s (source=%s kind=%s)",
+                handle.locator,
+                snapshot.source_name,
+                snapshot.snapshot_kind,
+            )
+            return snapshot
         except (KeyError, TypeError, ValueError) as exc:
             raise SnapshotStorageError(f"Snapshot JSON has invalid structure: {path}") from exc
 
     def delete(self, handle: SnapshotHandle) -> None:
+        logger.debug("Deleting snapshot %s", handle.locator)
         path = Path(handle.locator)
         if not path.exists():
             raise SnapshotNotFoundError(f"Snapshot not found: {path}")
@@ -71,6 +86,7 @@ class FileSystemSnapshotStorage(SnapshotStorage):
         try:
             path.unlink()
             self._cleanup_empty_dirs(path.parent)
+            logger.debug("Deleted snapshot %s", handle.locator)
         except OSError as exc:
             raise SnapshotStorageError(f"Failed to delete snapshot {path}: {exc}") from exc
 
@@ -84,7 +100,14 @@ class FileSystemSnapshotStorage(SnapshotStorage):
             return []
 
         files = sorted(path for path in directory.glob("*.snapshot.json") if path.is_file())
-        return [SnapshotHandle(locator=str(path)) for path in files]
+        handles = [SnapshotHandle(locator=str(path)) for path in files]
+        logger.debug(
+            "Listed %d %s snapshots for source '%s'",
+            len(handles),
+            snapshot_kind,
+            source_name,
+        )
+        return handles
 
     def _snapshot_dir(self, source_name: str, snapshot_kind: SnapshotKind) -> Path:
         return self._root_dir / source_name.strip().replace(" ", "_") / snapshot_kind

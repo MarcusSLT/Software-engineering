@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 
 from stix2.v21 import Bundle
 
 from ti_framework.domain.exceptions import BundleStorageError
 from ti_framework.domain.models import BundleHandle
 from ti_framework.ports.bundle_storage import BundleStorage
+
+logger = logging.getLogger(__name__)
 
 
 class FileSystemBundleStorage(BundleStorage):
@@ -18,6 +21,7 @@ class FileSystemBundleStorage(BundleStorage):
         self._root_dir = Path(root_dir)
 
     def save(self, bundle: Bundle, *, source_name: str) -> BundleHandle:
+        logger.debug("Saving STIX bundle %s for source '%s'", bundle.id, source_name)
         safe_source_name = source_name.strip().replace(" ", "_")
         target_dir = self._root_dir / safe_source_name
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -28,4 +32,6 @@ class FileSystemBundleStorage(BundleStorage):
         except OSError as exc:
             raise BundleStorageError(f"Failed to save STIX bundle to {path}: {exc}") from exc
 
-        return BundleHandle(locator=str(path))
+        handle = BundleHandle(locator=str(path))
+        logger.info("Saved STIX bundle for source '%s' to %s", source_name, handle.locator)
+        return handle
