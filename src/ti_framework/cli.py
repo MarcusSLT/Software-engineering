@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from ti_framework.application.pipeline_runner import PipelineRunner, PipelineRunResult
 from ti_framework.config.loaders import load_source_configs
@@ -131,8 +133,103 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default="data/logs/pipeline.log",
         help="Optional path to a log file",
     )
+    run_parser.add_argument(
+        "--status-file",
+        default="data/status/last_run.json",
+        help="Path to the JSON status report written after a run",
+    )
+
+    status_parser = subparsers.add_parser(
+        "status",
+        help="Show a summary of the most recent pipeline run",
+    )
+    status_parser.add_argument(
+        "--status-file",
+        default="data/status/last_run.json",
+        help="Path to the JSON status report produced by the run command",
+    )
+    status_parser.add_argument(
+        "--log-level",
+        default="WARNING",
+        help="Logging level for the CLI command",
+    )
 
     return parser
+
+
+def _build_status_report(
+    *,
+    config_path: str | Path,
+    snapshots_dir: str | Path,
+    bundles_dir: str | Path,
+    results: Sequence[PipelineRunResult],
+) -> dict[str, Any]:
+    generated_at = datetime.now(timezone.utc).isoformat()
+    failed_sources = sum(1 for result in results if not result.succeeded)
+    succeeded_sources = len(results) - failed_sources
+    return {
+        "generated_at": generated_at,
+        "config_path": str(config_path),
+        "snapshots_dir": str(snapshots_dir),
+        "bundles_dir": str(bundles_dir),
+        "total_sources": len(results),
+        "succeeded_sources": succeeded_sources,
+        "failed_sources": failed_sources,
+        "sources": [
+            {
+                "source_name": result.source_name,
+                "source_url": result.source_url,
+                "succeeded": result.succeeded,
+                "error_message": result.error_message,
+                "snapshot_locator": result.snapshot_locator,
+                "snapshot_deleted": result.snapshot_deleted,
+                "total_index_entries": result.total_index_entries,
+                "new_index_entries": result.new_index_entries,
+                "fetched_entries": len(result.fetched_entries),
+                "parsed_entries": len(result.parsed_entries),
+                "stix_bundle_locator": result.stix_bundle_locator,
+                "stix_object_count": result.stix_object_count,
+            }
+            for result in results
+        ],
+    }
+
+
+def _save_status_report(status_file: str | Path, report: dict[str, Any]) -> None:
+    path = Path(status_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_status_report(status_file: str | Path) -> dict[str, Any]:
+    path = Path(status_file)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _print_status_report(report: dict[str, Any], status_file: str | Path) -> None:
+    print(f"Status file: {Path(status_file)}")
+    print(f"Generated at: {report.get('generated_at', 'unknown')}")
+    print(f"Configuration: {report.get('config_path', 'unknown')}")
+    print(f"Total sources: {report.get('total_sources', 0)}")
+    print(f"Succeeded sources: {report.get('succeeded_sources', 0)}")
+    print(f"Failed sources: {report.get('failed_sources', 0)}")
+
+    for source in report.get("sources", []):
+        print(f"Source: {source['source_name']}")
+        print(f"  succeeded: {source['succeeded']}")
+        if not source["succeeded"]:
+            print(f"  error: {source.get('error_message')}")
+            continue
+        print(f"  index snapshot kept: {not source['snapshot_deleted']}")
+        print(f"  total index entries: {source['total_index_entries']}")
+        print(f"  new index entries: {source['new_index_entries']}")
+        print(f"  fetched entries: {source['fetched_entries']}")
+        print(f"  parsed entries: {source['parsed_entries']}")
+        if source.get("snapshot_locator"):
+            print(f"  index snapshot: {source['snapshot_locator']}")
+        if source.get("stix_bundle_locator"):
+            print(f"  STIX bundle: {source['stix_bundle_locator']}")
+            print(f"  STIX object count: {source['stix_object_count']}")
 
 
 def _run_validate_command(config_path: str | Path, log_level: str | int) -> int:
@@ -215,6 +312,7 @@ def _run_run_command(
     bundles_dir: str | Path,
     log_level: str | int,
     log_file: str | Path | None,
+    status_file: str | Path,
 ) -> int:
     validate_result = validate_config(config_path)
     if not validate_result.is_valid:
@@ -236,10 +334,36 @@ def _run_run_command(
     for result in results:
         _print_run_result(result)
 
+    report = _build_status_report(
+        config_path=config_path,
+        snapshots_dir=snapshots_dir,
+        bundles_dir=bundles_dir,
+        results=results,
+    )
+    _save_status_report(status_file, report)
+
     failed_runs = sum(1 for result in results if not result.succeeded)
     print(f"Completed sources: {len(results)}")
     print(f"Failed sources: {failed_runs}")
+    print(f"Status report: {Path(status_file)}")
     return 0 if failed_runs == 0 else 1
+
+
+def _run_status_command(status_file: str | Path, log_level: str | int) -> int:
+    configure_framework_logging(log_level)
+    path = Path(status_file)
+    if not path.exists():
+        print(f"Status file not found: {path}")
+        return 1
+
+    try:
+        report = _load_status_report(path)
+    except Exception as exc:  # noqa: BLE001 - report malformed status file cleanly
+        print(f"Failed to read status file {path}: {exc}")
+        return 1
+
+    _print_status_report(report, path)
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -258,7 +382,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             bundles_dir=args.bundles_dir,
             log_level=args.log_level,
             log_file=args.log_file,
+            status_file=args.status_file,
         )
+
+    if args.command == "status":
+        return _run_status_command(args.status_file, args.log_level)
 
     parser.error(f"Unsupported command: {args.command}")
     return 2
