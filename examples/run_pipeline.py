@@ -31,6 +31,7 @@ def main() -> None:
     sources_path = PROJECT_ROOT / "config" / "sources.json"
     snapshots_dir = PROJECT_ROOT / "data" / "snapshots"
     bundles_dir = PROJECT_ROOT / "data" / "bundles"
+    logs_dir = PROJECT_ROOT / "data" / "logs"
 
     storage = FileSystemSnapshotStorage(root_dir=snapshots_dir)
     bundle_storage = FileSystemBundleStorage(root_dir=bundles_dir)
@@ -57,6 +58,7 @@ def main() -> None:
         stix_bundle_builder=stix_bundle_builder,
         bundle_storage=bundle_storage,
         log_level="INFO",
+        log_file=logs_dir / "pipeline.log",
     )
 
     source_configs = load_source_configs(sources_path)

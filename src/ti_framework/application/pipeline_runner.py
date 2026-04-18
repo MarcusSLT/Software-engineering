@@ -57,9 +57,10 @@ class PipelineRunner:
         stix_bundle_builder: StixBundleBuilder | None = None,
         bundle_storage: BundleStorage | None = None,
         log_level: int | str = "WARNING",
+        log_file: str | None = None,
     ) -> None:
-        configure_framework_logging(log_level)
-        logger.debug("Initializing PipelineRunner with log_level=%r", log_level)
+        configure_framework_logging(log_level, log_file=log_file)
+        logger.debug("Initializing PipelineRunner with log_level=%r, log_file=%r", log_level, log_file)
         self._scrapper = scrapper
         self._preprocessor = preprocessor
         self._differ = differ
