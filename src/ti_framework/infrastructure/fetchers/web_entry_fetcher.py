@@ -29,8 +29,11 @@ class WebEntryFetcher(EntryFetcher):
                 index_url=index_entry.publication_url,
                 snapshot_kind="entry",
             )
-            snapshot = self._scrapper.get_snapshot(target)
-            handle = self._scrapper.save_snapshot(snapshot)
+            try:
+                snapshot = self._scrapper.get_snapshot(target)
+                handle = self._scrapper.save_snapshot(snapshot)
+            except Exception:  # noqa: BLE001 - one broken entry must not stop the source
+                continue
             results.append(FetchedEntry(index_entry=index_entry, snapshot_handle=handle))
 
         return results

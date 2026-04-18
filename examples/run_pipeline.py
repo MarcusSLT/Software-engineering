@@ -53,6 +53,11 @@ def main() -> None:
 
     for result in results:
         print(f"Source: {result.source_name}")
+        print(f"  succeeded: {result.succeeded}")
+        if not result.succeeded:
+            print(f"  error: {result.error_message}")
+            continue
+
         print(f"  index snapshot kept: {not result.snapshot_deleted}")
         print(f"  total index entries: {result.total_index_entries}")
         print(f"  new index entries: {result.new_index_entries}")

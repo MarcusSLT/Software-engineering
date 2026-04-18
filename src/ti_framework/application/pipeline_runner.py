@@ -32,6 +32,8 @@ class PipelineRunResult:
     parsed_entries: tuple[Entry, ...]
     stix_bundle_locator: str | None
     stix_object_count: int
+    succeeded: bool = True
+    error_message: str | None = None
 
 
 class PipelineRunner:
@@ -59,50 +61,66 @@ class PipelineRunner:
         self._bundle_storage = bundle_storage
 
     def run_source(self, source_config: SourceConfig) -> PipelineRunResult:
-        parser = self._parser_loader(source_config.parser_path)
         source = source_config.to_source()
+        try:
+            parser = self._parser_loader(source_config.parser_path)
+            snapshot_handle = self._save_index_snapshot(source)
+            index_entries = parser.parse_index(self._preprocessor.preprocess(snapshot_handle))
+            new_entries = self._differ.diff(
+                current_snapshot_handle=snapshot_handle,
+                current_entries=index_entries,
+                parser=parser,
+                preprocessor=self._preprocessor,
+            )
 
-        snapshot_handle = self._save_index_snapshot(source)
-        index_entries = parser.parse_index(self._preprocessor.preprocess(snapshot_handle))
-        new_entries = self._differ.diff(
-            current_snapshot_handle=snapshot_handle,
-            current_entries=index_entries,
-            parser=parser,
-            preprocessor=self._preprocessor,
-        )
+            if self._should_drop_fresh_snapshot(source.name, new_entries):
+                self._storage.delete(snapshot_handle)
+                return PipelineRunResult(
+                    source_name=source.name,
+                    source_url=source.index_url,
+                    snapshot_locator=None,
+                    snapshot_deleted=True,
+                    total_index_entries=len(index_entries),
+                    new_index_entries=0,
+                    new_entries=(),
+                    fetched_entries=(),
+                    parsed_entries=(),
+                    stix_bundle_locator=None,
+                    stix_object_count=0,
+                )
 
-        if self._should_drop_fresh_snapshot(source.name, new_entries):
-            self._storage.delete(snapshot_handle)
+            fetched_entries, parsed_entries = self._fetch_and_parse_new_entries(parser, new_entries)
+            bundle_handle, stix_object_count = self._build_and_save_bundle(source.name, parsed_entries)
+
+            return PipelineRunResult(
+                source_name=source.name,
+                source_url=source.index_url,
+                snapshot_locator=snapshot_handle.locator,
+                snapshot_deleted=False,
+                total_index_entries=len(index_entries),
+                new_index_entries=len(new_entries),
+                new_entries=tuple(new_entries),
+                fetched_entries=tuple(fetched_entries),
+                parsed_entries=tuple(parsed_entries),
+                stix_bundle_locator=None if bundle_handle is None else bundle_handle.locator,
+                stix_object_count=stix_object_count,
+            )
+        except Exception as exc:  # noqa: BLE001 - isolate source failures from one another
             return PipelineRunResult(
                 source_name=source.name,
                 source_url=source.index_url,
                 snapshot_locator=None,
-                snapshot_deleted=True,
-                total_index_entries=len(index_entries),
+                snapshot_deleted=False,
+                total_index_entries=0,
                 new_index_entries=0,
                 new_entries=(),
                 fetched_entries=(),
                 parsed_entries=(),
                 stix_bundle_locator=None,
                 stix_object_count=0,
+                succeeded=False,
+                error_message=str(exc),
             )
-
-        fetched_entries, parsed_entries = self._fetch_and_parse_new_entries(parser, new_entries)
-        bundle_handle, stix_object_count = self._build_and_save_bundle(source.name, parsed_entries)
-
-        return PipelineRunResult(
-            source_name=source.name,
-            source_url=source.index_url,
-            snapshot_locator=snapshot_handle.locator,
-            snapshot_deleted=False,
-            total_index_entries=len(index_entries),
-            new_index_entries=len(new_entries),
-            new_entries=tuple(new_entries),
-            fetched_entries=tuple(fetched_entries),
-            parsed_entries=tuple(parsed_entries),
-            stix_bundle_locator=None if bundle_handle is None else bundle_handle.locator,
-            stix_object_count=stix_object_count,
-        )
 
     def run_all(self, source_configs: Iterable[SourceConfig]) -> list[PipelineRunResult]:
         return [self.run_source(config) for config in source_configs if config.enabled]
@@ -121,10 +139,14 @@ class PipelineRunner:
             return [], []
 
         fetched_entries = self._entry_fetcher.fetch(new_entries)
-        parsed_entries = [
-            parser.parse_entry(self._preprocessor.preprocess(item.snapshot_handle), item.index_entry)
-            for item in fetched_entries
-        ]
+        parsed_entries: list[Entry] = []
+        for item in fetched_entries:
+            try:
+                parsed_entries.append(
+                    parser.parse_entry(self._preprocessor.preprocess(item.snapshot_handle), item.index_entry)
+                )
+            except Exception:  # noqa: BLE001 - one broken entry must not stop the source
+                continue
         return fetched_entries, parsed_entries
 
     def _build_and_save_bundle(self, source_name: str, parsed_entries: list[Entry]) -> tuple[BundleHandle | None, int]:
