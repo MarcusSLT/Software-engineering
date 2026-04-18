@@ -3,11 +3,6 @@ import pytest
 from unittest.mock import MagicMock
 from src.ti_framework.application.pipeline_runner import PipelineRunner
 
-import sys
-from pathlib import Path
-import pytest
-from unittest.mock import MagicMock
-
 from ti_framework.config.models import SourceConfig
 
 
