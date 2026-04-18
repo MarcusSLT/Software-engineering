@@ -31,15 +31,21 @@ class WebScrapper(Scrapper):
     def get_snapshot(self, source: Source) -> Snapshot:
         try:
             response = self._http_client.get(source.index_url)
+            payload = response.as_utf8_bytes()
         except Exception as exc:  # noqa: BLE001 - infrastructure boundary
             raise FetchError(
                 f"Failed to fetch source '{source.name}' from {source.index_url}: {exc}"
             ) from exc
+
+        if not payload.strip():
+            raise FetchError(
+                f"Failed to fetch source '{source.name}' from {source.index_url}: empty response body"
+            )
 
         return Snapshot(
             collected_at=datetime.now(timezone.utc),
             source_url=response.url,
             source_name=source.name,
             snapshot_kind=source.snapshot_kind,
-            data=response.as_utf8_bytes(),
+            data=payload,
         )
