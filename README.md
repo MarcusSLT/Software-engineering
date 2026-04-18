@@ -190,24 +190,26 @@ ti-framework run --config config/sources.json
 ti-framework status
 ```
 
-Если команда `ti-framework` недоступна, можно использовать запуск через Python.
+Если команда `ti-framework` недоступна, можно использовать запуск через Python:
 
-Linux / macOS:
+```text
+Linux / macOS
 PYTHONPATH=./src python -m ti_framework.cli validate --config config/sources.json
 PYTHONPATH=./src python -m ti_framework.cli run --config config/sources.json
 PYTHONPATH=./src python -m ti_framework.cli status
 
-Windows PowerShell:
+Windows PowerShell
 $env:PYTHONPATH="./src"
 python -m ti_framework.cli validate --config config/sources.json
 python -m ti_framework.cli run --config config/sources.json
 python -m ti_framework.cli status
 
-Windows cmd:
+Windows cmd
 set PYTHONPATH=./src
 python -m ti_framework.cli validate --config config/sources.json
 python -m ti_framework.cli run --config config/sources.json
 python -m ti_framework.cli status
+```
 
 Во время работы framework формирует:
 
