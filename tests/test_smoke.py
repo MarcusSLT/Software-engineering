@@ -6,7 +6,7 @@ project_root = (
 """
 
 КОМАНДА ДЛЯ ЗАПУСКА ТЕСТОВ:
-python -m pytest tests/smoke-tests.py --cov=ti_framework.config:tests/smoke_test.py --cov-report=term-missing -v
+python -m pytest tests/test_smoke.py --cov=ti_framework.config:tests/test_smoke.py --cov-report=term-missing -v
 
 
 """
