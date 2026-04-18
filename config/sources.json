@@ -5,6 +5,12 @@
       "index_url": "https://1275.ru/ioc/",
       "parser_path": "ti_framework.infrastructure.parsers.sec1275_parser.Sec1275Parser",
       "enabled": true
+    },
+    {
+      "name": "Securelist",
+      "index_url": "https://securelist.com/all/",
+      "parser_path": "ti_framework.infrastructure.parsers.securelist_parser.SecurelistParser",
+      "enabled": true
     }
   ]
 }
