@@ -12,6 +12,7 @@ from ti_framework.logging_utils import configure_framework_logging
 from ti_framework.ports.bundle_storage import BundleStorage
 from ti_framework.ports.differ import Differ
 from ti_framework.ports.entry_fetcher import EntryFetcher
+from ti_framework.ports.ioc_filter import IOCFilter
 from ti_framework.ports.parser import Parser
 from ti_framework.ports.preprocessor import Preprocessor
 from ti_framework.ports.scrapper import Scrapper
@@ -52,6 +53,7 @@ class PipelineRunner:
         storage: SnapshotStorage,
         parser_loader: Callable[[str], Parser],
         entry_fetcher: EntryFetcher | None = None,
+        ioc_filter: IOCFilter | None = None,
         stix_bundle_builder: StixBundleBuilder | None = None,
         bundle_storage: BundleStorage | None = None,
         log_level: int | str = "WARNING",
@@ -64,6 +66,7 @@ class PipelineRunner:
         self._storage = storage
         self._parser_loader = parser_loader
         self._entry_fetcher = entry_fetcher
+        self._ioc_filter = ioc_filter
         self._stix_bundle_builder = stix_bundle_builder
         self._bundle_storage = bundle_storage
 
@@ -190,9 +193,17 @@ class PipelineRunner:
         for item in fetched_entries:
             try:
                 logger.debug("Parsing entry snapshot for %s", item.index_entry.publication_url)
-                parsed_entries.append(
-                    parser.parse_entry(self._preprocessor.preprocess(item.snapshot_handle), item.index_entry)
-                )
+                parsed_entry = parser.parse_entry(self._preprocessor.preprocess(item.snapshot_handle), item.index_entry)
+                if self._ioc_filter is not None:
+                    before_count = len(parsed_entry.iocs)
+                    parsed_entry = self._ioc_filter.filter_entry(parsed_entry)
+                    logger.debug(
+                        "Filtered IOC set for %s: %d -> %d",
+                        item.index_entry.publication_url,
+                        before_count,
+                        len(parsed_entry.iocs),
+                    )
+                parsed_entries.append(parsed_entry)
             except Exception:  # noqa: BLE001 - one broken entry must not stop the source
                 logger.exception("Failed to parse entry page for %s", item.index_entry.publication_url)
                 continue

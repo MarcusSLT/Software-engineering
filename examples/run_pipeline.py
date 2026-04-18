@@ -14,6 +14,10 @@ from ti_framework.application.pipeline_runner import PipelineRunner
 from ti_framework.config.loaders import load_source_configs
 from ti_framework.infrastructure.differs.previous_snapshot_differ import PreviousSnapshotDiffer
 from ti_framework.infrastructure.fetchers.web_entry_fetcher import WebEntryFetcher
+from ti_framework.infrastructure.filters.invalid_domain_rule import DropInvalidDomainRule
+from ti_framework.infrastructure.filters.internal_url_rule import DropInternalUrlRule
+from ti_framework.infrastructure.filters.rule_based_ioc_filter import RuleBasedIOCFilter
+from ti_framework.infrastructure.filters.special_purpose_ipv4_rule import DropSpecialPurposeIPv4Rule
 from ti_framework.infrastructure.http.requests_http_client import RequestsHttpClient
 from ti_framework.infrastructure.parsers.parser_loader import load_parser
 from ti_framework.infrastructure.preprocessors.utf8_snapshot_preprocessor import Utf8SnapshotPreprocessor
@@ -36,6 +40,11 @@ def main() -> None:
     differ = PreviousSnapshotDiffer(storage=storage)
     entry_fetcher = WebEntryFetcher(scrapper=scrapper)
     stix_bundle_builder = Stix21BundleBuilder()
+    ioc_filter = RuleBasedIOCFilter([
+        DropSpecialPurposeIPv4Rule(),
+        DropInvalidDomainRule(),
+        DropInternalUrlRule(),
+    ])
 
     runner = PipelineRunner(
         scrapper=scrapper,
@@ -44,6 +53,7 @@ def main() -> None:
         storage=storage,
         parser_loader=load_parser,
         entry_fetcher=entry_fetcher,
+        ioc_filter=ioc_filter,
         stix_bundle_builder=stix_bundle_builder,
         bundle_storage=bundle_storage,
         log_level="INFO",
