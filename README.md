@@ -190,6 +190,7 @@ pip install -e .
 ti-framework validate --config config/sources.json
 ti-framework run --config config/sources.json
 ti-framework status
+ti-framework export-suricata -i <путь к входному STIX‑бандлу> -o <путь для сохранения правил Suricata>.rules
 ```
 
 Если команда `ti-framework` недоступна, можно использовать запуск через Python:
@@ -219,3 +220,38 @@ python -m ti_framework.cli status
 - STIX bundles в `data/bundles`
 - статус последнего запуска в `data/status/last_run.json`
 - лог выполнения pipeline в `data/logs/pipeline.log`
+
+## Экспорт правил Suricata
+### Генерация файла правил
+Для создания .rules‑файла используется команда export-suricata:
+ti-framework export-suricata -i <путь к входному STIX‑бандлу> -o <путь для сохранения правил Suricata>.rules
+### Установка и настройка Suricata
+```text
+Linux / macOS
+sudo apt install suricata
+sudo cp <путь для сохранения правил Suricata .rules> /etc/suricata/rules/
+```
+### Подключение правил в конфигурации Suricata
+Отредактируйте /etc/suricata/suricata.yaml, найдите секцию rule-files и добавьте имя вашего файла (без пути):
+```yaml
+rule-files:
+  - <имя>.rules
+```
+### Запуск Suricata
+Запустите Suricata на нужном сетевом интерфейсе (замените eth0 на имя вашего интерфейса):
+
+```bash
+sudo suricata -v -c /etc/suricata/suricata.yaml -i eth0
+```
+### Проверка срабатывания правил
+В отдельном терминале выполните DNS‑запрос к одному из доменов, присутствующих в вашем STIX‑бандле:
+
+```bash
+nslookup <ioc домен> 8.8.8.8
+```
+#### Для просмотра алертов в реальном времени используйте утилиту jq:
+
+```bash
+sudo apt install -y jq
+sudo jq 'select(.event_type=="alert")' /var/log/suricata/eve.json
+```
