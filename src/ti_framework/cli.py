@@ -25,7 +25,7 @@ from ti_framework.infrastructure.storage.filesystem_snapshot_storage import File
 from ti_framework.infrastructure.stix.filesystem_bundle_storage import FileSystemBundleStorage
 from ti_framework.infrastructure.stix.stix21_bundle_builder import Stix21BundleBuilder
 from ti_framework.logging_utils import configure_framework_logging
-
+from ti_framework.infrastructure.services.simple_stix_to_suricata import generate_rules
 
 @dataclass(frozen=True, slots=True)
 class ValidateConfigResult:
@@ -149,6 +149,27 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Path to the JSON status report produced by the run command",
     )
     status_parser.add_argument(
+        "--log-level",
+        default="WARNING",
+        help="Logging level for the CLI command",
+    )
+    export_parser = subparsers.add_parser(
+        "export-suricata",
+        help="Generate Suricata rules from a STIX bundle JSON file",
+    )
+    export_parser.add_argument(
+        "--input", "-i",
+        required=True,
+        type=Path,
+        help="Path to input STIX bundle JSON file",
+    )
+    export_parser.add_argument(
+        "--output", "-o",
+        required=True,
+        type=Path,
+        help="Path to output Suricata rules file (.rules)",
+    )
+    export_parser.add_argument(
         "--log-level",
         default="WARNING",
         help="Logging level for the CLI command",
@@ -365,6 +386,26 @@ def _run_status_command(status_file: str | Path, log_level: str | int) -> int:
     _print_status_report(report, path)
     return 0
 
+def _run_export_suricata_command(
+    input_path: Path,
+    output_path: Path,
+    log_level: str | int,
+) -> int:
+    configure_framework_logging(log_level)
+
+    if not input_path.exists():
+        print(f"Input file not found: {input_path}")
+        return 1
+
+    try:
+        generate_rules(input_path, output_path)
+    except Exception as exc:  # noqa: BLE001 - CLI should report any generation failure cleanly
+        print(f"Failed to generate Suricata rules: {exc}")
+        return 1
+
+    print(f"Suricata rules successfully written to: {output_path}")
+    return 0
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return a process exit code."""
@@ -387,6 +428,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "status":
         return _run_status_command(args.status_file, args.log_level)
+
+    if args.command == "export-suricata":
+        return _run_export_suricata_command(
+            input_path=args.input,
+            output_path=args.output,
+            log_level=args.log_level,
+        )
 
     parser.error(f"Unsupported command: {args.command}")
     return 2
