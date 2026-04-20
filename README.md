@@ -6,7 +6,7 @@
 
 Проект решает задачу автоматизации сбора публикаций из внешних источников, извлечения индикаторов компрометации (IoC) и формирования результата в стандартизированном формате **STIX 2.1 Bundle**.
 
-Система ориентирована на обработку неоднородных и слабоструктурированных источников: HTML-страниц, бюллетеней безопасности, блогов и технических публикаций.  
+Система ориентирована на обработку неоднородных и слабоструктурированных источников: HTML-страниц, бюллетеней безопасности, блогов и технических публикаций.
 Ключевая идея архитектуры — **модульный pipeline**, где каждый источник проходит последовательные этапы получения, препроцессинга, парсинга, сравнения состояний, извлечения новых публикаций и сборки итогового STIX bundle.
 
 ## Цели проекта
@@ -54,14 +54,26 @@
 - `StixBundleBuilder`
 - `Storage`
 - `BundleStorage`
+- `HttpClient`
+- `IOCFilter`
 
 ### Реализации (`src/ti_framework/infrastructure`)
 Для MVP добавлены реализации:
 
 - `WebScrapper`
 - `Utf8SnapshotPreprocessor`
+- `PreviousSnapshotDiffer`
+- `WebEntryFetcher`
 - `Stix21BundleBuilder`
 - `FileSystemBundleStorage`
+- `RequestsHttpClient`
+- `RuleBasedIOCFilter`
+
+Также в проекте присутствуют source-specific парсеры:
+
+- `Sec1275Parser`
+- `SecurelistParser`
+- `ProofpointThreatInsightParser`
 
 ## STIX-слой
 
@@ -111,25 +123,27 @@ MVP ориентирован на **статичные HTML-источники**
 - `parser_path`
 - `enabled`
 
-Если новый источник использует уже существующий parser, достаточно изменить конфиг.  
+Если новый источник использует уже существующий parser, достаточно изменить конфиг.
 Если нужен новый parser, достаточно добавить новый класс и прописать его dotted path в конфиге.
 ## Тестирование
-Проект использует pytest для модульного тестирования с моккированием внешних зависимостей.
+Проект использует **Pytest** для модульного тестирования, применяя многоуровневую стратегию: от изолированных юнит-тестов до сквозных E2E-сценариев. Мы активно используем мокирование (`unittest.mock`) для изоляции логики от внешних зависимостей (сеть, файловая система).
+Тесты сгруппированы по функциональному назначению:
 
-### Структура тестов
-Модуль	Файл	Проверяемое
-- `unit-tests_config.py`	        Парсинг JSON, валидация полей
-- `unit-tests_domain.py`	        Снапшоты, хеши, даты
-- `unit-tests_infrastructure.py`	Парсеры, хранилище, STIX
-- `unit-tests_ports.py`	            Абстракции через моки
-- `unit-test_application.py`        PipelineRunner, фильтрация
-### Запуск Unit-тестов
-- `python run_tests.py`               Все Unit-тесты (всего 26)
-### Запуск Smoke-тестов
-- `python -m pytest tests/smoke-tests.py --cov=ti_framework.config:tests/smoke_test.py --cov-report=term-missing -v`
+*   **Core Domain:** Проверка базовых моделей данных и валидации сущностей (`Snapshot`, `Entry`). *(Файлы: test_domain.py)*
+*   **Configuration & CLI:** Тестирование загрузчиков конфигураций, а также проверка командной строки (валидация аргументов, статусы). *(Файлы: test_cli_*.*py, test_config.py)*
+*   **Infrastructure Components:** Изолированное тестирование низкоуровневых компонентов — парсеров (`ProofpointThreatInsightParser`, `SecurelistParser`), хранилищ и базовой логики обработки данных. *(Файлы: test_infrastructure.py, test_*parser.py)*
+*   **Ports & Abstractions:** Проверка контрактов между слоями через мокирование внешних интерфейсов (HTTP, etc.). *(Файл: test_ports.py)*
+*   **Pipeline Logic (Integration):** Тестирование логического потока данных — как компоненты взаимодействуют друг с другом и обрабатывают данные в рамках одного сценария. *(Файлы: test_ioc_filter.*.*py, test_pipeline_resilience.py)*
+*   **System Orchestration:** Проверка работы главного оркестратора (`PipelineRunner`) при разных входных условиях (успех/сбой). *(Файл: test_application.py)*
+*   **End-to-End Scenarios (E2E):** Полный сквозной тест, имитирующий рабочий цикл от начала до конца с минимальным количеством моков. *(Файлы: test_e2e_stix_pipeline.py)*
+*   **Smoke Tests:** Быстрая проверка работоспособности ядра системы при старте проекта (проверка импортов и инициализации). *(Файл: test_smoke.py)*
+
+### Запуск всех тестов вместе
+- `python run_all_tests.py`               Все тесты (всего 52)
+### Запуск отдельного теста
+- `python -m pytest tests/test_названиетеста.py --cov=ti_framework --cov-report=term-missing -v `
 ### Результаты тестирования
-- [Результаты unit-тестов](./tests/results/unit-tests.pdf)
-- [Результаты smoke-тестов](./tests/results/smoke-tests.pdf)
+- [Результаты тестов](./tests/results/tests.pdf)
 ## Стек технологий
 
 - **Python 3.11+**
@@ -148,18 +162,60 @@ MVP ориентирован на **статичные HTML-источники**
 Перед запуском проекта необходимо создать виртуальное окружение и установить зависимости из `requirements.txt`.
 
 ```text
-Linux / macOS:
+Linux / macOS
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
 
-Windows PowerShell:
+Windows PowerShell
 python -m venv .venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -e .
 
-Windows cmd:
+Windows cmd
 python -m venv .venv
 .venv\Scripts\activate.bat
 pip install -r requirements.txt
+pip install -e .
+```
+
+## Запуск
+
+После установки проекта как пакета (`pip install -e .`) доступны команды:
+
+```bash
+ti-framework validate --config config/sources.json
+ti-framework run --config config/sources.json
+ti-framework status
+```
+
+Если команда `ti-framework` недоступна, можно использовать запуск через Python:
+
+```text
+Linux / macOS
+PYTHONPATH=./src python -m ti_framework.cli validate --config config/sources.json
+PYTHONPATH=./src python -m ti_framework.cli run --config config/sources.json
+PYTHONPATH=./src python -m ti_framework.cli status
+
+Windows PowerShell
+$env:PYTHONPATH="./src"
+python -m ti_framework.cli validate --config config/sources.json
+python -m ti_framework.cli run --config config/sources.json
+python -m ti_framework.cli status
+
+Windows cmd
+set PYTHONPATH=./src
+python -m ti_framework.cli validate --config config/sources.json
+python -m ti_framework.cli run --config config/sources.json
+python -m ti_framework.cli status
+```
+
+Во время работы framework формирует:
+
+- snapshot-данные в `data/snapshots`
+- STIX bundles в `data/bundles`
+- статус последнего запуска в `data/status/last_run.json`
+- лог выполнения pipeline в `data/logs/pipeline.log`
