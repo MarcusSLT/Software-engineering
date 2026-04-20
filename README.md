@@ -224,7 +224,9 @@ python -m ti_framework.cli status
 ## Экспорт правил Suricata
 ### Генерация файла правил
 Для создания .rules‑файла используется команда export-suricata:
+```bash
 ti-framework export-suricata -i <путь к входному STIX‑бандлу> -o <путь для сохранения правил Suricata>.rules
+```
 ### Установка и настройка Suricata
 ```text
 Linux / macOS
